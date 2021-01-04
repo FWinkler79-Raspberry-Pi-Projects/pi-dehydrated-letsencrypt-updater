@@ -1,0 +1,10 @@
+version: "3.7"
+services:
+  docker-client:
+    image: fwinkler79/arm32v7-dehydrated-letsencrypt-updater:1.0.0
+    volumes:
+      # Map the host's docker socket into the container
+      # As a result the docker client in the container can
+      # interact with the host's docker daemon, thus controlling
+      # the host docker from within the container.
+      - /var/run/docker.sock:/var/run/docker.sock
