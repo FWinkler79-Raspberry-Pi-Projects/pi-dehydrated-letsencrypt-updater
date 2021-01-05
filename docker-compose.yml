@@ -1,10 +1,20 @@
 version: "3.7"
 services:
-  docker-client:
+  cert-updater:
     image: fwinkler79/arm32v7-dehydrated-letsencrypt-updater:1.0.0
+    container_name: cert-updater
     volumes:
       # Map the host's docker socket into the container
       # As a result the docker client in the container can
       # interact with the host's docker daemon, thus controlling
       # the host docker from within the container.
       - /var/run/docker.sock:/var/run/docker.sock
+      # The configurations of the dehydrated script.
+      # Place the following files here:
+      # * domains.txt - containing your DNS domain from DuckDNS.
+      # * config      - specify the configurations for dehydrated script
+      # * hook.sh     - the hook script implementing what should be done when the certs were fetched.
+      # Make sure the hook script is executable.
+      - ./config:/letsencrypt/configuration
+      # Map the folder where the certificates will be stored.
+      - ./certs:/letsencrypt/certs
