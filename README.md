@@ -31,6 +31,28 @@ The respository also comes with a Docker-Compose file making it easy to start th
 
 The working model of this image was greatly inspired by the excellent blog post on [Hass, DuckDNS and Let's Encrypt](https://www.splitbrain.org/blog/2017-08/10-homeassistant_duckdns_letsencrypt) from the Home Assistant community. Make sure you read and understand it, since you will find pieces of it (both concepts and software) in this image.
 
+In essence it is is like this:
+
+* First you need a domain, i.e. a textual URL representation of your server's public IP address.
+  You will want one anyway if your server is on the public internet, because typing IP addresses (especially IPv6 ones 😉) is tedious and they also tend to change. You can get a free domain within seconds from [Duck DNS](https://www.duckdns.org), a Domain Name System (DNS) provider.
+* To get an SSL certificate for your server that is accepted by browsers like Chrome or Safari, you need one from a trusted certificate signing authority (CA). 
+  Most charge money for signing your certificates, but luckily [Let's Encrypt](https://letsencrypt.org/) is for free. So that's what we use.
+* By creating and signing your certificates, Let's Encrypt effectively vouches for you not being a malicious scumbag that tries to rip other people off. They therefore need a proof that domain or server that your certificate is created for is under your control.  
+  Note, you could still be a scumbag, but as long as you have your own domain under control and not trying to impersonate someone else's that's fine for Let's Encrypt... 😉
+* So when you ask Let's Encrypt for a certificate, you need to specify which domain it is intended for. There you specify your DuckDNS domain. You might specify a few more things you want to show up in the cert, e.g. your email, etc. In return Let's Encrypt will send you a challenge. That could either be "Place a file at the .well-known/acme endpoint on your web server and fill it with this code I give you" or "Go create a DNS TXT record in your DNS server, that contains that text I send you.". 
+* You decide for one option or the other and do as you are told. Let's Encrypt will then either try to download the file and check the code or do a DNS lookup of your domain, retrieving the TXT record and checking for the contents. If the values are correct, Let's Encrypt assumes that you are in control of the server and / or domain you want the certificate for.
+
+All of that happens automatically - no human intervention included - and in this setup we use the DNS TXT record approach, since it does not force us to expose anything on a server (that we might not even be able to control) or open any extra ports.
+In return we need a DNS provider that provides an API to add and modify TXT records to DNS probes for our domain. Luckily DuckDNS has a REST API that does just that!
+
+The [dehydrated](https://github.com/dehydrated-io/dehydrated) script does all the communication with Let's Encrypt and provides enough configuration options to let us register, select the type of challenge (`http-01` or `dns-01`) and fetch certificates. Additionally it allows us to define hooks that will be called when a challenge is received from Let's Encrypt or when the certificates were fetched / updated. 
+
+With a simple hook that is included in this image and inspired by work done [here](https://www.splitbrain.org/blog/2017-08/10-homeassistant_duckdns_letsencrypt) we are able to fulfill the DNS TXT record challenge and prove to Let's Encrypt that we are who we claim to be ... well, or at least that we (as opposed to some attacker) control the domain the certificate is for.
+
+That's all there is to it. It is surprisingly easy, once you wrapped your head around it.
+
+Now let's get started.
+
 ## Building the image
 
 You can build this image on your Ma using Docker's cross-architecture build feature:
