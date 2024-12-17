@@ -1,5 +1,17 @@
 # pi-dehydrated-letsencrypt-updater
 
+- [Contents](#contents)
+- [How it works](#how-it-works)
+- [Building the image](#building-the-image)
+- [Image File Structure](#image-file-structure)
+- [Usage](#usage)
+  - [Configuration](#configuration)
+- [Advanced Usage](#advanced-usage)
+- [Troubleshooting](#troubleshooting)
+- [References](#references)
+
+## Contents
+
 A Docker image for Raspberry Pi to 
 
 * register a certificate account with Let's Encrypt 
@@ -309,6 +321,7 @@ docker run -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /letsencr
 ```
 
 ❗Note: The dehydrated script also allows to revoke certificates. In case you need that, you can run the script from this image directly.
+
 ## Troubleshooting
 
 In case of trouble with the certificate fetch, proceed as follows:
