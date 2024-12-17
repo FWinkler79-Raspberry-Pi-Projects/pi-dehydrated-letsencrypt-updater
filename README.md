@@ -68,7 +68,7 @@ docker buildx create --name raspibuilder
 docker buildx use raspibuilder
 
 # Cross-building Docker image for Raspi
-docker buildx build --platform linux/arm/v7 -t <docker-user-name>/<image-name>:<version> --push .
+docker buildx build --platform linux/arm64 -t <docker-user-name>/<image-name>:<version> --push .
 ```
 
 This builds an image for Raspberry Pi and pushes it to the Docker Hub repository you specify.
@@ -113,7 +113,7 @@ The following docker-compose file shows how the image can / should be used:
 version: "3.7"
 services:
   cert-updater:
-    image: fwinkler79/arm32v7-dehydrated-letsencrypt-updater:1.0.0
+    image: fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0
     container_name: cert-updater
     volumes:
       # Map the host's docker socket into the container
@@ -287,25 +287,25 @@ You can call all the scripts (including the dehydrated script itself) from the d
 If the container is not running yet, you can for example use the following command to register manually:
 
 ```bash
-docker run -it fwinkler79/arm32v7-dehydrated-letsencrypt-updater:1.0.0 /letsencrypt/scripts/register.sh
+docker run -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /letsencrypt/scripts/register.sh
 ```
 
 If you already have a running container, you can use:
 
 ```bash
-docker exec -it fwinkler79/arm32v7-dehydrated-letsencrypt-updater:1.0.0 /letsencrypt/scripts/register.sh
+docker exec -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /letsencrypt/scripts/register.sh
 ```
 
 To run a bash, call:
 
 ```bash
-docker exec -it fwinkler79/arm32v7-dehydrated-letsencrypt-updater:1.0.0 /bin/bash
+docker exec -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /bin/bash
 ```
 
 To run the dehydrated script yourself, run:
 
 ```bash
-docker run -it fwinkler79/arm32v7-dehydrated-letsencrypt-updater:1.0.0 /letsencrypt/dehydrated --register --accept-terms --config /letsencrypt/configuration/config
+docker run -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /letsencrypt/dehydrated --register --accept-terms --config /letsencrypt/configuration/config
 ```
 
 ❗Note: The dehydrated script also allows to revoke certificates. In case you need that, you can run the script from this image directly.
@@ -341,10 +341,19 @@ This should re-register with Let's Encrypt and re-fetch new certificates. It the
 * [Duck DNS](https://www.duckdns.org)
 * [Let's Encrypt](https://letsencrypt.org/)
 * [dehydrated](https://github.com/dehydrated-io/dehydrated)
-* [Cross-Building Docker Images](https://fwinkler79.github.io/blog/cross-building-docker-images.html)
 * [Alpine docker client](https://github.com/Cethy/alpine-docker-client)
 * [Docker Dehydrated](https://github.com/matrix-org/docker-dehydrated)
 * [Installing TLS/SSL using Let's Encrypt](https://community.home-assistant.io/t/installing-tls-ssl-using-lets-encrypt/196975)
 * [Effortless Encryption with Let's Encrypt and DuckDNS](https://www.home-assistant.io/blog/2017/09/27/effortless-encryption-with-lets-encrypt-and-duckdns/)
 * [Hass, DuckDNS and Let's Encrypt](https://www.splitbrain.org/blog/2017-08/10-homeassistant_duckdns_letsencrypt)
 * [Simple Let's Encrypt on Debian](https://www.splitbrain.org/blog/2016-05/14-simple_letsencrypt_on_debian_apache)
+
+**Docker Cross-Building Images**
+* [Cross-Building Docker Images](https://fwinkler79.github.io/blog/cross-building-docker-images.html)
+* [Docker Multi-Arch Builds and Cross Builds](https://docs.docker.com/docker-for-mac/multi-arch/)
+* [arm32v7 Docker Images](https://hub.docker.com/u/arm32v7)
+* [arm64v8 Docker Images](https://hub.docker.com/u/arm64v8)
+* [Docker Official Images](https://github.com/docker-library/official-images?tab=readme-ov-file#architectures-other-than-amd64)
+* [Docker Official Alpine arm64v8 Image](https://hub.docker.com/r/arm64v8/alpine)
+* [Alpine Official arm64v8 image](https://hub.docker.com/layers/library/alpine/latest/images/sha256-cf7e6d447a6bdf4d1ab120c418c7fd9bdbb9c4e838554fda3ed988592ba02936)
+

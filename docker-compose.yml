@@ -1,7 +1,7 @@
 version: "3.7"
 services:
   cert-updater:
-    image: fwinkler79/arm32v7-dehydrated-letsencrypt-updater:1.0.0
+    image: fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0
     container_name: cert-updater
     volumes:
       # Map the host's docker socket into the container

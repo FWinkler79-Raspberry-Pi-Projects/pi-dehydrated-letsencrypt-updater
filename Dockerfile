@@ -1,4 +1,4 @@
-FROM fwinkler79/arm32v7-docker-client:1.0.0
+FROM fwinkler79/arm64v8-docker-client:1.0.0
 
 RUN apk update      \
     && apk upgrade  \
