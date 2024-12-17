@@ -73,7 +73,7 @@ docker buildx build --platform linux/arm/v7 -t <docker-user-name>/<image-name>:<
 
 This builds an image for Raspberry Pi and pushes it to the Docker Hub repository you specify.
 
-See [Cross-Building Docker Images](https://fwinkler79.github.io/blog/cross-building-docker-images.html) for details.
+See [Cross-Building Docker Images](https://fwinkler79.github.io/blog/2021/01/04/cross-building-docker-images.html) for details.
 
 ## Image File Structure
 
