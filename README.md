@@ -15,7 +15,7 @@
 
 Every now and then you might want to update the [dehydrated](https://github.com/dehydrated-io/dehydrated) script which acts as the certificate client for Letsencrypt. You can download the file from the link and place it in the [`letsencrypt`](letsencrypt/) folder.
 
-❗ IMPORTANT: you need to adjust the script's `umask 077` to something less restrictive. We usually use: `umask 022` (read and execute permissions)
+❗ IMPORTANT: you need to adjust the script's `umask 077` to something less restrictive. We usually use: `umask 000` (read and execute permissions)
 
 See also this description about `umask` permissions: https://en.wikipedia.org/wiki/Umask
 
