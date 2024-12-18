@@ -11,7 +11,7 @@ set -o pipefail
 [[ -n "${ZSH_VERSION:-}" ]] && set -o SH_WORD_SPLIT && set +o FUNCTION_ARGZERO && set -o NULL_GLOB && set -o noglob
 [[ -z "${ZSH_VERSION:-}" ]] && shopt -s nullglob && set -f
 
-umask 077 # paranoid umask, we're creating private keys
+umask 033 # CHANGED! - this was 077 which is a paranoid umask. we're creating private keys
 
 # Close weird external file descriptors
 exec 3>&-
@@ -372,7 +372,7 @@ load_config() {
   HOOK=
   PREFERRED_CHAIN=
   HOOK_CHAIN="no"
-  RENEW_DAYS="30"
+  RENEW_DAYS="37"         # changed
   KEYSIZE="4096"
   WELLKNOWN=
   PRIVATE_KEY_RENEW="yes"
