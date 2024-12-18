@@ -6,7 +6,7 @@
 - [Building the image](#building-the-image)
 - [Image File Structure](#image-file-structure)
 - [Usage](#usage)
-  - [Configuration](#configuration)
+- [Configuration](#configuration)
 - [Advanced Usage](#advanced-usage)
 - [Troubleshooting](#troubleshooting)
 - [References](#references)
@@ -218,13 +218,14 @@ hass
 Exited successfully.
 crond: crond (busybox 1.31.1) started, log level 8
 ```
-### Configuration
+
+## Configuration
 
 In the local `./config` folder you should place at least the following files.
 
 All those files are required by the [dehydrated](https://github.com/dehydrated-io/dehydrated) script and are best described by its author and this blog on [Hass, DuckDNS and Let's Encrypt](https://www.splitbrain.org/blog/2017-08/10-homeassistant_duckdns_letsencrypt).
 
-#### The `config` file:
+### The `config` file:
 
 ```bash
 # For testing / development use the staging endpoint of let's encrypt.
@@ -256,14 +257,14 @@ DOMAINS_TXT="/letsencrypt/configuration/domains.txt"
 
 If you comment out the first line, you will be using the production endpoint, giving your real certificates - but beware of the rate limit!
 
-#### The `domains.txt` file:
+### The `domains.txt` file:
 
 ```bash
 <your Duck DNS domain here>
 ```
 ❗ Here you need to specify your Duck DNS domain that you want to get signed SSL certificates for.
 
-#### The `hook.sh` file:
+### The `hook.sh` file:
 
 ```bash
 #!/usr/bin/env bash
