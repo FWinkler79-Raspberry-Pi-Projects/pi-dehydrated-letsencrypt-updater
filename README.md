@@ -1,5 +1,6 @@
 # pi-dehydrated-letsencrypt-updater
 
+- [❗ WARNING - Updating `dehydrated` Script ❗](#-warning---updating-dehydrated-script-)
 - [Contents](#contents)
 - [How it works](#how-it-works)
 - [Building the image](#building-the-image)
@@ -9,6 +10,19 @@
 - [Advanced Usage](#advanced-usage)
 - [Troubleshooting](#troubleshooting)
 - [References](#references)
+
+## ❗ WARNING - Updating `dehydrated` Script ❗
+
+Every now and then you might want to update the [dehydrated](https://github.com/dehydrated-io/dehydrated) script which acts as the certificate client for Letsencrypt. You can download the file from the link and place it in the [`letsencrypt`](letsencrypt/) folder.
+
+❗ IMPORTANT: you need to adjust the script's `umask 077` to something less restrictive. We usually use: `umask 022` (read and execute permissions)
+
+See also this description about `umask` permissions: https://en.wikipedia.org/wiki/Umask
+
+If you fail to do that, the certificates will be stored in files and folders only accessible to `root`.
+Home Assistant and Portainer will then not have access unless they are run in `root` mode (`PUID=0`, `PGID=0`).
+That should be avoided, however, as an attacker that found a way into Home Assistant or Portainer could then gain full `root` access.
+
 
 ## Contents
 
