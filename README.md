@@ -7,6 +7,9 @@
 - [Image File Structure](#image-file-structure)
 - [Usage](#usage)
 - [Configuration](#configuration)
+  - [The `config` file:](#the-config-file)
+  - [The `domains.txt` file:](#the-domainstxt-file)
+  - [The `hook.sh` file:](#the-hooksh-file)
 - [Advanced Usage](#advanced-usage)
 - [Troubleshooting](#troubleshooting)
 - [References](#references)
@@ -365,6 +368,11 @@ In case of trouble with the certificate fetch, proceed as follows:
 This should re-register with Let's Encrypt and re-fetch new certificates. It then should also restart `hass`.
 
 ## References
+
+* [Dehydrated](https://github.com/dehydrated-io/dehydrated/blob/master/README.md)
+* [Dehydrated Domains.txt Reference](https://github.com/dehydrated-io/dehydrated/blob/master/docs/domains_txt.md)
+* [Dehydrated Examples](https://github.com/dehydrated-io/dehydrated/tree/master/docs/examples)
+* [Dehydrated Docs](https://github.com/dehydrated-io/dehydrated/tree/master/docs)
 
 * [Duck DNS](https://www.duckdns.org)
 * [Let's Encrypt](https://letsencrypt.org/)

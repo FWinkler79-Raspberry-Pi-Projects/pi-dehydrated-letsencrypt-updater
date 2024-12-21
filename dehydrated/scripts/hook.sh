@@ -123,7 +123,7 @@ deploy_cert() {
   echo " -- Timestamp:      $TIMESTAMP"
   echo
   echo "Calling user script to set permissions."
-  /dehydrated/configurations/set-permissions.sh
+  /dehydrated/scripts/set-permissions.sh
   echo
   echo "Calling user script to restarting docker containers."
   /dehydrated/configurations/restart-containers.sh
