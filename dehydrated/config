@@ -1,7 +1,9 @@
+# Config File Reference: https://github.com/dehydrated-io/dehydrated/blob/master/docs/examples/config
+
 # For testing / development use the staging endpoint of let's encrypt.
 # See also: https://github.com/dehydrated-io/dehydrated/blob/master/docs/staging.md
 # Comment the line below for production
-CA="https://acme-staging-v02.api.letsencrypt.org/directory"
+CA="$CA_URL"
 
 # Which challenge should be used? Currently http-01 and dns-01 are supported
 # dns-01 means: Let's encrypt will send a challenge with a text that it wants
@@ -13,12 +15,24 @@ CA="https://acme-staging-v02.api.letsencrypt.org/directory"
 # Then it will issue a certificate for us.
 CHALLENGETYPE="dns-01"
 
+# Minimum days before expiration to automatically renew certificate (default: 30)
+RENEW_DAYS="$RENEW_DAYS_BEFORE_EXPIRY"
+
 # Script to execute the DNS challenge and run after cert generation.
 # The script calls a REST API of DuckDNS to add a challenge text from 
 # Let's encrypt to the TXT records for our DNS domain. Let's encrypt will
 # check that TXT record to check if we are in control of our domain.
 # Only then will Let's Encypt issue a certificate.
-HOOK="/letsencrypt/configuration/hook.sh"
+HOOK="/dehydrated/scripts/hook.sh"
+
+# Directory for account keys and registration information
+ACCOUNTDIR="/dehydrated/accounts"
+
+# Issuer chain cache directory (default: $BASEDIR/chains)
+CHAINCACHE="/dehydrated/chains"
 
 # Location of the domains.txt file.
-DOMAINS_TXT="/letsencrypt/configuration/domains.txt" 
+DOMAINS_TXT="/dehydrated/configurations/domains.txt"
+
+# Location of output certificates
+CERTDIR="/dehydrated/certificates"

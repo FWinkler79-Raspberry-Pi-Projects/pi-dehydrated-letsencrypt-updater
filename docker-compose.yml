@@ -9,6 +9,23 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
+      # (Mandatory) Your Duck DNS API token.
+      - DUCK_DNS_TOKEN="<your Duck DNS API token>"
+
+      # (Optional) The Let's Encrypt URL to use. 
+      # Possible values are:
+      #  For staging:    https://acme-staging-v02.api.letsencrypt.org/directory (default)
+      #  For production: https://acme-v02.api.letsencrypt.org/directory         (beware rate limiting!)
+      #- CA_URL=https://acme-staging-v02.api.letsencrypt.org/directory
+
+      # (Optional) The number of days before expiry that a cert
+      # should be refreshed. 
+      # Default: 35
+      #- RENEW_DAYS_BEFORE_EXPIRY=35
+
+      # (Optional) The time to wait for DNS challenge to have propagated.
+      # Default: 60
+      #- DNS_PROPAGATION_TIME=60
     volumes:
       # Map the host's docker socket into the container
       # As a result the docker client in the container can
