@@ -25,7 +25,7 @@ services:
 
       # (Optional) The time to wait for DNS challenge to have propagated.
       # Default: 60
-      #- DNS_PROPAGATION_TIME=60
+      #- DNS_CHALLENGE_PROPAGATION_TIME=60
     volumes:
       # Map the host's docker socket into the container
       # As a result the docker client in the container can
