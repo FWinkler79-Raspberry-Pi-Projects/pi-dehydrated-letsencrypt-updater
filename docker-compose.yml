@@ -32,12 +32,7 @@ services:
       # interact with the host's docker daemon, thus controlling
       # the host docker from within the container.
       - /var/run/docker.sock:/var/run/docker.sock
-      # The configurations of the dehydrated script.
-      # Place the following files here:
-      # * domains.txt - containing your DNS domain from DuckDNS.
-      # * config      - specify the configurations for dehydrated script
-      # * hook.sh     - the hook script implementing what should be done when the certs were fetched.
-      # Make sure the hook script is executable.
-      - ./letsencrypt/configuration:/letsencrypt/configuration
-      # Map the folder where the certificates will be stored.
-      - ./letsencrypt/certs:/letsencrypt/certs
+      # The user configurations of this docker image.
+      - ./dehydrated/configurations:/dehydrated/configurations
+      # The output folder where certificates will be stored.
+      - ./dehydrated/certificates:/dehydrated/certificates

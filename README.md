@@ -1,177 +1,170 @@
 # pi-dehydrated-letsencrypt-updater
 
-- [❗ WARNING - Updating `dehydrated` Script ❗](#-warning---updating-dehydrated-script-)
-- [Contents](#contents)
-- [How it works](#how-it-works)
-- [Building the image](#building-the-image)
-- [Image File Structure](#image-file-structure)
+- [What is pi-dehydrated-letsencrypt-updater?](#what-is-pi-dehydrated-letsencrypt-updater)
+- [What does PDLU do?](#what-does-pdlu-do)
+- [How does PDLU work?](#how-does-pdlu-work)
 - [Usage](#usage)
-- [Configuration](#configuration)
-  - [The `config` file:](#the-config-file)
-  - [The `domains.txt` file:](#the-domainstxt-file)
-  - [The `hook.sh` file:](#the-hooksh-file)
-- [Advanced Usage](#advanced-usage)
+  - [Using Docker-Compose](#using-docker-compose)
+  - [User Configurations](#user-configurations)
+  - [Starting a Container](#starting-a-container)
 - [Troubleshooting](#troubleshooting)
+- [Appendix A: Technical Setup](#appendix-a-technical-setup)
+  - [Contents](#contents)
+  - [Image File Structure](#image-file-structure)
+  - [Docker File](#docker-file)
+  - [Scripts Explained](#scripts-explained)
+- [Appendix B: Building the image](#appendix-b-building-the-image)
+- [Appendix C: Advanced Usage](#appendix-c-advanced-usage)
 - [References](#references)
 
-## ❗ WARNING - Updating `dehydrated` Script ❗
+## What is pi-dehydrated-letsencrypt-updater?
 
-Every now and then you might want to update the [dehydrated](https://github.com/dehydrated-io/dehydrated) script which acts as the certificate client for Letsencrypt. You can download the file from the link and place it in the [`letsencrypt`](letsencrypt/) folder.
+pi-dehydrated-letsencrypt-updater (PDLU) is docker image that fetches [Let's Encrypt](https://letsencrypt.org) certificates for domains registered with [Duck DNS](https://www.duckdns.org/). It was built for Raspberry Pi with 64-bit ARM processors, but it could easily be built for other platforms as well.
 
-❗ IMPORTANT: you need to adjust the script's `umask 077` to something less restrictive. We usually use: `umask 000` (read and execute permissions)
+Let's Encrypt is a certificate authority (CA) that issues properly signed certificates free of charge. Duck DNS is a free dynamic DNS (dynDNS) services that you can register domains for your servers with.
 
-See also this description about `umask` permissions: https://en.wikipedia.org/wiki/Umask
+If you have a home server accessible by a given domain registered with Duck DNS, and you protect the server with e.g. HTTPS, you will need a valid and signed certificate that was issued by a trusted certificate authority and for your domain. This is what PDLU was built for.
 
-If you fail to do that, the certificates will be stored in files and folders only accessible to `root`.
-Home Assistant and Portainer will then not have access unless they are run in `root` mode (`PUID=0`, `PGID=0`).
-That should be avoided, however, as an attacker that found a way into Home Assistant or Portainer could then gain full `root` access.
+PDLU is based on [dehydrated](https://github.com/dehydrated-io/dehydrated/tree/master), a shell script that implements a Let´s Encrypt client. 
 
+PDLU also includes a docker client inside the image. That allows PDLU to restart docker containers on the Docker host, e.g. after certificates have been refreshed and applications referring to them need to be restarted.
 
-## Contents
+In the following we explain how PDLU is used and how it works.
 
-A Docker image for Raspberry Pi to 
+## What does PDLU do? 
 
-* register a certificate account with Let's Encrypt 
-* download signed certificates for your [Duck DNS](https://www.duckdns.org) domain(s)
-* automatically refresh certificates for your domain
-* (optional) with custom hooks to trigger actions after certificates were refreshed
+In a nutshell, PDLU does the following:
 
-By default this image uses the `dns-01` challenge method with Let's Encrypt, which makes it possible to retrieve certificates from Let's Encrypt without having to provide specific Web endpoints for challenge callbacks.
-Instead, DNS TXT records are manipulated and used to prove to Let's Encrypt that you are the owner of your domain.
+1. Register an account with [Let's Encrypt](https://letsencrypt.org). 
+2. Request Certificates for one or more Duck [Duck DNS](https://www.duckdns.org) domains.
+3. Handle Let's Encrypt challenges to prove ownership of the Duck DNS domains.
+4. Download signed certificates from Let's Encrypt.
+5. Automatically refresh certificates.
+6. Restarts a configurable set of docker containers on the Docker host machine.
 
-The image contains the following components:
+## How does PDLU work?
 
-* a docker client
-* the [dehydrated / let's encrypt script](https://github.com/dehydrated-io/dehydrated) doing most of the magic
-* cron, bash, openssl, curl (needed by dehydrated)
+> :medal_sports: The working model of this image was greatly inspired by the excellent blog post on [Hass, DuckDNS and Let's Encrypt](https://www.splitbrain.org/blog/2017-08/10-homeassistant_duckdns_letsencrypt) from the Home Assistant community.
 
-I use this image to:
+To understand how PDLU works, we first need to understand how Let's Encrypt works. Let's Encrypt uses the ACME v2 Protocol to request and exchange certificates. As the owner of a network domain you request certificates from Let's Encrypt. When you so so, you have to prove to Let's Encrypt that you are the rightful owner of the domain. To do so, Let's Encrypt will respond with a _challenge_ to your initial certificate request. The challenge is simply a randomized token value. 
 
-* fetch my initial certificates for my Duck DNS domain
-* export them to a local folder on my docker host (via a volume mapping)
-* automatically refresh them before they expire (using cron installed in the image)
-* restart another container running a server that reads the certificates from the local folder on my docker host.
+In order to prove that you are the rightful owner of the domain, you need to make the challenge token value available to Let's Encrypt via a Web server or a DNS server you control. By providing the challenge value back to Let's Encrypt via a different channel tied to your domain (Web or DNS) you prove that you control the domain. That's reason enough for Let's Encrypt to trust you and sign certificates for you. Essentially, this is a two-factor authentication. 
 
-By doing so, I can run my server and automatically update its SSL certificates when they expire (happens every 90 days with Let's Encrypt certificates). That keeps the server certs always valid with zero manual intervention.
+In our case we will be using DNS as the channel to prove ownership of our domain. To do so, we need to make sure that the challenge token received by Let's Encrypt is added as `TXT` entries to the DNS records issued by the DNS server when somebody - like Let's Encrypt - does a DNS lookup of our domain. Since Duck DNS owns and controls our DNS server, we need to tell Duck DNS to add the challenge token to DNS records for our domain. Duck DNS provides a REST API for that. To call that API we need to get an API token, which is bound to our Duck DNS account, which we used to register our domain. 
 
-The respository also comes with a Docker-Compose file making it easy to start the image, and showing how I used it.
-
-## How it works
-
-The working model of this image was greatly inspired by the excellent blog post on [Hass, DuckDNS and Let's Encrypt](https://www.splitbrain.org/blog/2017-08/10-homeassistant_duckdns_letsencrypt) from the Home Assistant community. Make sure you read and understand it, since you will find pieces of it (both concepts and software) in this image.
-
-In essence it is is like this:
-
-* First you need a domain, i.e. a textual URL representation of your server's public IP address.
-  You will want one anyway if your server is on the public internet, because typing IP addresses (especially IPv6 ones 😉) is tedious and they also tend to change. You can get a free domain within seconds from [Duck DNS](https://www.duckdns.org), a Domain Name System (DNS) provider.
-* To get an SSL certificate for your server that is accepted by browsers like Chrome or Safari, you need one from a trusted certificate signing authority (CA). 
-  Most charge money for signing your certificates, but luckily [Let's Encrypt](https://letsencrypt.org/) is for free. So that's what we use.
-* By creating and signing your certificates, Let's Encrypt effectively vouches for you not being a malicious scumbag that tries to rip other people off. They therefore need a proof that domain or server that your certificate is created for is under your control.  
-  Note, you could still be a scumbag, but as long as you have your own domain under control and not trying to impersonate someone else's that's fine for Let's Encrypt... 😉
-* So when you ask Let's Encrypt for a certificate, you need to specify which domain it is intended for. There you specify your DuckDNS domain. You might specify a few more things you want to show up in the cert, e.g. your email, etc. In return Let's Encrypt will send you a challenge. That could either be "Place a file at the .well-known/acme endpoint on your web server and fill it with this code I give you" or "Go create a DNS TXT record in your DNS server, that contains that text I send you.". 
-* You decide for one option or the other and do as you are told. Let's Encrypt will then either try to download the file and check the code or do a DNS lookup of your domain, retrieving the TXT record and checking for the contents. If the values are correct, Let's Encrypt assumes that you are in control of the server and / or domain you want the certificate for.
-
-All of that happens automatically - no human intervention included - and in this setup we use the DNS TXT record approach, since it does not force us to expose anything on a server (that we might not even be able to control) or open any extra ports.
-In return we need a DNS provider that provides an API to add and modify TXT records to DNS probes for our domain. Luckily DuckDNS has a REST API that does just that!
-
-The [dehydrated](https://github.com/dehydrated-io/dehydrated) script does all the communication with Let's Encrypt and provides enough configuration options to let us register, select the type of challenge (`http-01` or `dns-01`) and fetch certificates. Additionally it allows us to define hooks that will be called when a challenge is received from Let's Encrypt or when the certificates were fetched / updated. 
-
-With a simple hook that is included in this image and inspired by work done [here](https://www.splitbrain.org/blog/2017-08/10-homeassistant_duckdns_letsencrypt) we are able to fulfill the DNS TXT record challenge and prove to Let's Encrypt that we are who we claim to be ... well, or at least that we (as opposed to some attacker) control the domain the certificate is for.
-
-That's all there is to it. It is surprisingly easy, once you wrapped your head around it.
-
-Now let's get started.
-
-## Building the image
-
-You can build this image on your Ma using Docker's cross-architecture build feature:
-
-```bash
-# Listing existing docker buildx builders. You can see which architectures are supported.
-docker buildx ls
-
-# Create docker buildx builder named 'raspibuilder'
-docker buildx create --name raspibuilder
-
-# Use 'raspibuilder' for docker buildx
-docker buildx use raspibuilder
-
-# Cross-building Docker image for Raspi
-docker buildx build --platform linux/arm64 -t <docker-user-name>/<image-name>:<version> --push .
-```
-
-This builds an image for Raspberry Pi and pushes it to the Docker Hub repository you specify.
-
-See [Cross-Building Docker Images](https://fwinkler79.github.io/blog/2021/01/04/cross-building-docker-images.html) for details.
-
-## Image File Structure
-
-The image is based on my [docker-client image](https://github.com/FWinkler79-Raspberry-Pi-Projects/pi-docker-client-image), which is based on alpine.
-
-The files that were added (apart from the installed tools listed above) are:
-
-```bash
-/letsencrypt
-  |- certs/           # The fetched certificates will be stored here. Make sure to map this to a local folder using a docker volume bind.
-  |- configuration/   # Contains the configuration files read by the dehydrated script.
-      |- config       # dehydrated configurations. See: https://github.com/dehydrated-io/dehydrated/blob/master/docs/examples/config
-      |- domains.txt  # This is where you specify your domain. Make sure you have created on at DuckDNS.
-      |- hook.sh      # This is a hook that deals with Let's Encrypt challenges and can be extended by you to trigger actions after fetch.
-  |- dehydrated       # The dehydrated script.
-
-/scripts
-  |- register.sh      # Uses the dehydrated script to register to Let's Encrypt.
-  |- fetch-certs.sh   # Uses the dehydrated script to fetch certs from Let's Encrypt.
-  |- run.sh           # Calls register, then fetch and then creates a cron job that periodically fetches new certificates.
-  |- unregister.sh    # Unregisters the active account from Let's Encrypt.
-```
-
-You should map the `/letsencrypt/certs` and `/letsencrypt/configuration` folders to local folders on your docker host.
-In the `certs` folder the fetched certificates will be stored, and you are likely to use them somewhere else.
-The `configurations` need to be adjusted to your specific domain and DuckDNS credentials.
-
-See [Usage](#usage) section below.
+Once we have called the Duck DNS REST API to include the challenge token inte DNS records, we inform Let's Encrypt that it can do a DNS lookup of our domain and verify that the the challenge was properly included. If that is the case, we have proven to Let's Encrypt that we own and control the domain. 
 
 ## Usage
+
+### Using Docker-Compose
 
 You can use the image with plain `docker`, but it is recommended to use `docker-compose`, since it simplifies usage a lot.
 
 The following docker-compose file shows how the image can / should be used:
 
 ```bash
-version: "3.7"
+---
 services:
   cert-updater:
     image: fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0
     container_name: cert-updater
+    network_mode: host
+    dns:
+      - 8.8.8.8   # required due to some alpine issue with not resolving names properly.
+    environment:
+      - PUID=1000
+      - PGID=1000
+      # (Mandatory) Your Duck DNS API token.
+      - DUCK_DNS_TOKEN="<your Duck DNS API token>"
+
+      # (Optional) The Let's Encrypt URL to use. 
+      # Possible values are:
+      #  For staging:    https://acme-staging-v02.api.letsencrypt.org/directory (default)
+      #  For production: https://acme-v02.api.letsencrypt.org/directory         (beware rate limiting!)
+      - CA_URL=https://acme-v02.api.letsencrypt.org/directory
+
+      # (Optional) The number of days before expiry that a cert
+      # should be refreshed. 
+      # Default: 35
+      #- RENEW_DAYS_BEFORE_EXPIRY=35
+
+      # (Optional) The time to wait for DNS challenge to have propagated.
+      # Default: 60
+      #- DNS_CHALLENGE_PROPAGATION_TIME=180
     volumes:
       # Map the host's docker socket into the container
       # As a result the docker client in the container can
       # interact with the host's docker daemon, thus controlling
       # the host docker from within the container.
       - /var/run/docker.sock:/var/run/docker.sock
-      # The configurations of the dehydrated script.
-      # Place the following files here:
-      # * domains.txt - containing your DNS domain from DuckDNS.
-      # * config      - specify the configurations for dehydrated script
-      # * hook.sh     - the hook script implementing what should be done when the certs were fetched.
-      # Make sure the hook script is executable.
-      - ./config:/letsencrypt/configuration
-      # Map the folder where the certificates will be stored.
-      - ./certs:/letsencrypt/certs
+      # The user configurations of this docker image.
+      - ./dehydrated/configurations:/dehydrated/configurations
+      # The output folder where certificates will be stored.
+      - ./dehydrated/certificates:/dehydrated/certificates
 ```
-This maps the `certs` folder inside the container to the local `./certs` folder.
-It also maps the `configuration` folder inside the container to the local `./config` folder.
 
-Additionally, it maps the local docker socket inside the container, so you can use the docker client inside the container to control the docker host's docker daemon. This s optional, but can be handy, if you need to restart _another_ docker container once the certificates were fetched / renewed.
+You need to specify your Duck DNS API token by setting the `DUCK_DNS_TOKEN` environment variable.
 
-Place the proper configurations into the `./config` folder (see below) and you are ready to start the container using:
+For production you should also set the `CA_URL` envrironment variable to point to https://acme-v02.api.letsencrypt.org/directory.
+While trying to get things running, use the staging landscape which is not rate limited. The staging landscape is set by default if no `CA_URL` is specified.
+
+You can teak the number of days before a certificate expires that decides when a certificate should be renwed.
+Certificates that are valid for less than `RENEW_DAYS_BEFORE_EXPIRY` will be refreshed automatically. The default of 35 days works well and is adjusted to the monthly refresh-check. There should be little reason to change this value. If you do, make sure your refresh check cycle fits accordingly.
+
+You can set the `DNS_CHALLENGE_PROPAGATION_TIME` in seconds. This time defines how long the this image will wait before calling the Let's Encrypt APIs to verify the delivered challenge response. Since Duck DNS sometimes takes a while to add and propagate challenge tokens to DNS records, you can adjust the time to wait for it to be done here. Typically 180 seconds should be enough. The default is 60 seconds.
+
+The `volumes` map defines three mappings:
+1. Mapping the Docker socket of the host into the container, so that the internal Docker client can interact with it.
+2. Mapping the `configurations` folder containing the user settings, i.e. `domains.txt` and `restart-containers.sh`
+3. Mapping the `certificates` folder where downloaded certificates will be stored.
+
+Note that you can point other applications (e.g. running in docker containers on the Docker host) to the `certificates` folder. This image will refresh the certificates in a timely manner and thus your applications should have working certificates at any point in time.
+
+### User Configurations
+
+In the `docker-compose.yaml` make sure to spefify at least the following:
+
+1. `DUCK_DNS_TOKEN` - the Duck DNS API token.
+2. `CA_URL` - the Let's Encrypt landscape to be used in production. (i.e. https://acme-v02.api.letsencrypt.org/directory)
+
+For more information see [Using Docker-Compose](#using-docker-compose).
+
+In your local `configurations` folder you should place at least the following files.
+
+1. `domains.text`
+2. `restart-containers.sh`
+
+The `domains.txt` file must contain the Duck DNS domains for which certificates shall be fetched. For example, the file could look as follows:
+
+```
+mydomain.duckdns.org
+```
+
+For more and more complex examples see [Dehydrated Domains.txt Reference](https://github.com/dehydrated-io/dehydrated/blob/master/docs/domains_txt.md).
+
+The `restart-containers.sh` script can be equally simple. For example the following file would restart two containers on the Docker host named `homeassistant` and `portainer`:
+
+```shell
+#!/bin/bash
+
+echo "Restarting Containers:"
+echo "-- homeassistant"
+echo "-- portainer"
+
+docker container restart homeassistant portainer
+```
+
+That's all you have to provide as configurations. The rest will be taken care of by this image internally.
+
+### Starting a Container
+
+To start the container, execute:
 
 ```bash
 docker-compose up # add -d, if you want to run it in the background.
 ```
 
-This will start the container which immediately will register with Let's Encrypt, fetch certificates and start a cron job to renew them.
+This will start the container amd immediately registers with Let's Encrypt to fetch certificates and start a cron job to renew them.
 You can verify it using:
 
 ```bash
@@ -222,108 +215,309 @@ Exited successfully.
 crond: crond (busybox 1.31.1) started, log level 8
 ```
 
-## Configuration
+## Troubleshooting
 
-In the local `./config` folder you should place at least the following files.
+In case of problems when fetching certificates proceed as follows:
 
-All those files are required by the [dehydrated](https://github.com/dehydrated-io/dehydrated) script and are best described by its author and this blog on [Hass, DuckDNS and Let's Encrypt](https://www.splitbrain.org/blog/2017-08/10-homeassistant_duckdns_letsencrypt).
+1. Log into the running `cert-updater` container and unregister from Let's Encrypt:
+   ```bash
+      docker exec -it cert-updater /bin/bash
+      $bash%>  /dehydrated/scripts/unregister.sh
+   ```
 
-### The `config` file:
+2. Delete any remaining `accounts` and `chains` folders:
+   ```bash
+      docker exec -it cert-updater /bin/bash
+      $bash%>  /dehydrated/scripts/remove-accounts-and-chains-cache.sh
+   ```
+
+3. Stop and remove the cert-updater container:
+   ```bash
+      docker-compose down
+      # if still necessary do also this:
+      docker container rm cert-updater 
+   ```
+4. Delete local certificates folder:
+   ```bash
+      sudo rm -rf ./certificates
+   ```
+5. Start cert-updater container again:
+   ```bash
+      docker-compose up -d
+      docker logs -f cert-updater # to see the container boot up.
+   ```
+
+This should re-register with Let's Encrypt and re-fetch new certificates. It then should also restart the containers given in `restart-containers.sh`.
+
+## Appendix A: Technical Setup
+
+### Contents
+
+The image contains the following components:
+
+* A Docker client
+* [dehydrated](https://github.com/dehydrated-io/dehydrated/tree/master) script acting as a Let's Encrypt client.
+* `cron`, `bash`, `openssl`, `curl`
+
+The image is based on [pi-docker-client-image](https://github.com/FWinkler79-Raspberry-Pi-Projects/pi-docker-client-image) ([image on Docker Hub](https://github.com/FWinkler79-Raspberry-Pi-Projects/pi-docker-client-image)). This image is a plain Alpine Linux image with a Docker client installed, so that from a docker container the Docker host can be controlled. This allows us to restart Docker containers from within this image that are running outside of it on the Docker host. This comes in handy when containers referencing certificates fetched by this image need to be restarted when the certificates were refreshed.
+
+### Image File Structure 
+
+The files that were added (apart from the installed tools listed above) are:
 
 ```bash
-# For testing / development use the staging endpoint of let's encrypt.
-# See also: https://github.com/dehydrated-io/dehydrated/blob/master/docs/staging.md
-# Comment the line below for production
-CA="https://acme-staging-v02.api.letsencrypt.org/directory"
-
-# Which challenge should be used? Currently http-01 and dns-01 are supported
-# dns-01 means: Let's encrypt will send a challenge with a text that it wants
-# us to put into a TXT record of the DNS response for our domain.
-# The hook script below will do that by calling an API of DuckDNS where our
-# domain is registered. DuckDNS will add the challenge text to the TXT DNS 
-# record and when Let's Encrypt does a DNS lookup (dig <domain> TXT) it will find
-# the challenge text their and believe us that we are in control of the domain.
-# Then it will issue a certificate for us.
-CHALLENGETYPE="dns-01"
-
-# Script to execute the DNS challenge and run after cert generation.
-# The script calls a REST API of DuckDNS to add a challenge text from 
-# Let's encrypt to the TXT records for our DNS domain. Let's encrypt will
-# check that TXT record to check if we are in control of our domain.
-# Only then will Let's Encypt issue a certificate.
-HOOK="/letsencrypt/configuration/hook.sh"
-
-# Location of the domains.txt file.
-DOMAINS_TXT="/letsencrypt/configuration/domains.txt" 
+/dehydrated
+  |- dehydrated                         # The dehydrated script acting as Let's Encrypt client.
+  |- config                             # The dehydrated (internal) configurations. See also: https://github.com/dehydrated-io/dehydrated/blob/master/docs/examples/config
+  |- certificates/                      # Folder where fetched certificates will be stored. Map this to a local folder.
+  |- configurations/                    # Contains the (public) user configurations.  
+      |- domains.txt                    # This is where the domains are specified for which certs shall be fetched.
+      |- restart-containers.sh          # A script that will be executed once certificates have been fetched. Can be used to restart docker containers on Docker host.
+/scripts
+  |- run.sh                              # The run script used as entry `CMD` of the Docker image. Calls fetch-and-update-certificates.sh and adds it as a CRON job.
+  |- fetch-and-update-certificates.sh    # The main script called by run.sh. Calls all other scripts to register, fetch, unregsiter.
+  |- register-with-letsencrypt.sh        # Uses the dehydrated script to create an account at Let's Encrypt.
+  |- request-certificates.sh             # Requests the certificates from Let's Encrypt.
+  |- hook.sh                             # Contains callbacks called by dehydrated during certificate fetch requests. Handles challenges from Let's Encrypt.
+  |- set-permissions.sh                  # Changes permissions of the certificate folder so that read-only access is possible. By default only root has access, which is too restrictive.
+  |- unregister.sh                       # Unregisters the active account from Let's Encrypt.
+  |- remove-accounts-and-chains-cache.sh # Cleanup script removing any remains of previous Let's Encrypt accounts.
 ```
-❗ Here you only need to change the first line normally. Especially, if you are playing around, you should avoid firing too many requests at the production Let's Encrypt endpoint. Otherwise you will suffer from rate limiting. Let's Encrypt provides a staging area, which you can call as often as you want, and which can be used for testing. It vends only fake certificates, of course.
 
-If you comment out the first line, you will be using the production endpoint, giving your real certificates - but beware of the rate limit!
+### Docker File
 
-### The `domains.txt` file:
+The `Dockerfile` is relatively simple:
 
-```bash
-<your Duck DNS domain here>
+```Dockerfile
+# Base image providing the docker client
+FROM fwinkler79/arm64v8-docker-client:1.0.0
+
+# Installing dependencies
+RUN apk update      \
+    && apk upgrade  \
+    && apk add curl \
+    && apk add bash \
+    && apk add openssl \
+    && rm -rf /var/cache/apk/*
+
+# Copying required files
+COPY ./dehydrated /dehydrated
+
+# The Duck DNS API token to use for API calls.
+# You need to set this to your Duck DNS token as 
+# it will be used in calls to Duck DNS REST API.
+ENV DUCK_DNS_TOKEN="unspecified"
+
+# The Let's Encrypt API URL to be used.
+# Options are: 
+# - Staging:    "https://acme-staging-v02.api.letsencrypt.org/directory"
+# - Production: "https://acme-v02.api.letsencrypt.org/directory"
+ENV CA_URL=https://acme-staging-v02.api.letsencrypt.org/directory
+
+# Number of days before expiry that 
+# certificates should be refreshed.
+ENV RENEW_DAYS_BEFORE_EXPIRY=35
+
+# Seconds to wait for the DNS challenge 
+# to have propagated.
+ENV DNS_CHALLENGE_PROPAGATION_TIME=60
+
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["/dehydrated/scripts/run.sh"]
 ```
-❗ Here you need to specify your Duck DNS domain that you want to get signed SSL certificates for.
 
-### The `hook.sh` file:
+Note that the `CA_URL` can point to a staging or production environment. The production environment is rate-limited.
+Firing too many requests at it will get you blocked for 2 days. Make sure to your staging whenever you are trying to get things working.
 
-```bash
+Also note that you need to provide your Duck DNS API token. The `hook.sh` script calls the Duck DNS API to position the challenge in the DNS records.
+
+### Scripts Explained
+
+#### run.sh
+
+```shell
+#!/bin/bash
+
+# Fetch certificates by registering, downloading and un-registering.
+/dehydrated/scripts/fetch-and-update-certificates.sh
+
+# Finally, create a CRON tab that renews the certs every 1st day of every month.
+echo "Creating a CRON tab to renew certificates every 1st day of every month."
+echo "0 1 1 * * /dehydrated/scripts/fetch-and-update-certificates.sh" > /etc/crontabs/root
+echo
+
+# Excute the CRON daemon in background (-b) to check logs (-d = stderr, 8 = Error, 0 = verbose)
+echo "Starting CRON daemon."
+crond -f -d 8
+```
+
+Triggers the entire process of fetching and updating certificates and registers it as a CRON job for regulare updates.
+
+#### fetch-and-update-certificates.sh
+
+```shell
+#!/bin/bash
+
+# Register with Let's Encrypt.
+/dehydrated/scripts/register-with-letsencrypt.sh
+
+# After registration, request certificates.
+/dehydrated/scripts/request-certificates.sh
+
+# Unregister from Let's Encrypt.
+/dehydrated/scripts/unregister.sh
+
+# Remove any remains of accounts.
+/dehydrated/scripts/remove-accounts-and-chains-cache.sh
+```
+
+Executes the entire process of fetching and updating certificates. Starts by registering with Let's Encrypt, followed by requesting certificates. This will result in a challenge from Let's Encrypt which is then handled by calling Duck DNS APIs to add the challenge to the DNS records (see also [hook.sh](#hooksh)). Once done, unregisters from Let's Encrypt and removes any remains of the account information to not keep any lingering state.
+
+#### register-with-letsencrypt.sh
+
+```shell
+#!/bin/bash
+echo "Registering with Let's Encrypt."
+/dehydrated/dehydrated --register --accept-terms --config /dehydrated/config
+```
+
+Uses the `dehydrated` script to register to Let's Encrypt. The internal `/dehydrated/config` file is used for configurations.
+
+#### request-certificates.sh
+
+```shell
+#!/bin/bash
+echo "Requesting certificates."
+/dehydrated/dehydrated --cron --config /dehydrated/config --out /dehydrated/certificates
+```
+
+Uses the `dehydrated` script to retrieve or update certificates from Let's Encrypt. The internal `/dehydrated/config` file is used for configurations.
+Donwloaded / refreshed certificates are stored in the `/dehydrated/certificates` folder.
+
+##### hook.sh
+
+The `hook.sh` script is a script with callback functions triggered in the lifecycle of the certificate retrieval of `dehydrated`.
+In the following the relevant callbacks will be described individually.
+
+```shell
 #!/usr/bin/env bash
-set -e
-set -u
-set -o pipefail
 
-# Your Domain
-domain="<your Duck DNS domain>"
-
-# Your DuckDNS Token
-token="<your Duck DNS Token>"
- 
-case "$1" in
-    "deploy_challenge")
-        curl "https://www.duckdns.org/update?domains=$domain&token=$token&txt=$4"
-        echo
-        ;;
-    "clean_challenge")
-        curl "https://www.duckdns.org/update?domains=$domain&token=$token&txt=removed&clear=true"
-        echo
-        ;;
-    "deploy_cert")
-        echo "Certificates download succeeded."       # your certificate post-deploy hook goes here!
-        echo "Restarting Home Assistant container."   # in this sample we are restarting another container that will read the certs.
-        docker container restart hass                 # restarting `hass` container on docker host from within this container!
-	    ;;
-    "unchanged_cert")
-        echo "Certificate unchanged. Doing nothing."
-        ;;
-    "startup_hook")
-        echo "Started up successfully"
-        ;;
-    "exit_hook")
-        echo "Exited successfully."
-        ;;
-    *)
-        ;;
-esac
+deploy_challenge() {
+  local DOMAIN="${1}" TOKEN_FILENAME="${2}" TOKEN_VALUE="${3}"
+  echo "Deploy Challenge called:"
+  echo "-- Domain:                   $DOMAIN"
+  echo "-- Duck DNS API Token:       $DUCK_DNS_TOKEN"
+  echo "-- Challenge Response Token: $TOKEN_VALUE."
+  echo 
+  echo "Calling Duck DNS API to set DNS TXT Record containing challenge response token."
+  echo "-- REST URL: 'https://www.duckdns.org/update?domains=$DOMAIN&token=$DUCK_DNS_TOKEN&txt=$TOKEN_VALUE'"
+  echo 
+  curl "https://www.duckdns.org/update?domains=$DOMAIN&token=$DUCK_DNS_TOKEN&txt=$TOKEN_VALUE"
+  echo 
+  echo "Challenge response token deployed to DNS TXT Records."
+  echo "Waiting $DNS_CHALLENGE_PROPAGATION_TIME seconds for DNS-based challenge to propagate."
+  sleep $DNS_CHALLENGE_PROPAGATION_TIME
+  echo
+}
 ```
-❗ Note that here you **need to enter your DuckDNS domain and token**. Optionally, you can also add one or more hooks.
 
-## Advanced Usage
+The `deploy_challenge` function is called when Let's Encrypt responded with a challenge token. The function calls the Duck DNS REST API to deploy the challenge as DNS record `TXT` entries (see `CHALLENGETYPE="dns-01"` in [config](dehydrated/config)). 
+
+Note that the Duck DNS API Token is required here as well as the domain and challenge token value.
+
+```shell
+clean_challenge() {
+  local DOMAIN="${1}" TOKEN_FILENAME="${2}" TOKEN_VALUE="${3}"
+  echo "Clean Challenge called:"
+  echo "-- Domain:                   $DOMAIN"
+  echo "-- Duck DNS API Token:       $DUCK_DNS_TOKEN"
+  echo "-- Challenge Response Token: $TOKEN_VALUE"
+  echo
+  echo "Calling Duck DNS API to clean DNS TXT record used for challenge response token."
+  echo "-- REST URL: 'https://www.duckdns.org/update?domains=$DOMAIN&token=$DUCK_DNS_TOKEN&txt=$TOKEN_VALUE&clear=true'"
+  echo
+  curl "https://www.duckdns.org/update?domains=$DOMAIN&token=$DUCK_DNS_TOKEN&txt=$TOKEN_VALUE&clear=true"
+  echo
+}
+```
+
+The `clean_challenge` function is called, when the challenge was validates by Let's Encrypt and can be removed from the DNS records again.
+Also this function call the Duck DNS REST APIs to remove the formerly added `TXT` enties from any future DNS records.
+
+```shell
+deploy_cert() {
+  local DOMAIN="${1}" KEYFILE="${2}" CERTFILE="${3}" FULLCHAINFILE="${4}" CHAINFILE="${5}" TIMESTAMP="${6}"
+  echo "Successfully downloaded certificate:"
+  echo " -- Domain:         $DOMAIN"
+  echo " -- Key File:       $KEYFILE"
+  echo " -- Cert File:      $CERTFILE"
+  echo " -- Fullchain File: $FULLCHAINFILE"
+  echo " -- Chain File:     $CHAINFILE"
+  echo " -- Timestamp:      $TIMESTAMP"
+  echo
+  echo "Calling user script to set permissions."
+  /dehydrated/scripts/set-permissions.sh
+  echo
+  echo "Calling user script to restarting docker containers."
+  /dehydrated/configurations/restart-containers.sh
+  echo
+}
+```
+
+The `deploy_cert` function is called whenever certificates have been successfully downloaded. As a result the function will adjust the permissions to be read-only for everyone and thus lowers the very restrictive access rights that come with `dehydrated` defaults (i.e. root-only).
+After setting permissions, it calls the `restart-containers.sh` script responsible for restaring containers on Docker host.
+
+```shell
+unchanged_cert() {
+  local DOMAIN="${1}" KEYFILE="${2}" CERTFILE="${3}" FULLCHAINFILE="${4}" CHAINFILE="${5}"
+  echo "Certificate unchanged:"
+  echo " -- Domain:         $DOMAIN"
+  echo " -- Key File:       $KEYFILE"
+  echo " -- Cert File:      $CERTFILE"
+  echo " -- Fullchain File: $FULLCHAINFILE"
+  echo " -- Chain File:     $CHAINFILE"
+  echo "Nothing to be done!"
+}
+```
+
+The `unchanged_cert` function is called whenever `dehydrated` detects that a certificate is still valid and therefore does not have to be changed. Output is of informational nature only and for debugging purposes.
+
+## Appendix B: Building the image
+
+You can build this image on your Ma using Docker's cross-architecture build feature:
+
+```bash
+# Listing existing docker buildx builders. You can see which architectures are supported.
+docker buildx ls
+
+# Create docker buildx builder named 'raspibuilder'
+docker buildx create --name raspibuilder
+
+# Use 'raspibuilder' for docker buildx
+docker buildx use raspibuilder
+
+# Cross-building Docker image for Raspi
+docker buildx build --platform linux/arm64 -t <docker-user-name>/<image-name>:<version> --push .
+```
+
+This builds an image for Raspberry Pi and pushes it to the Docker Hub repository you specify.
+
+See [Cross-Building Docker Images](https://fwinkler79.github.io/blog/2021/01/04/cross-building-docker-images.html) for details.
+
+## Appendix C: Advanced Usage
 
 You can call all the scripts (including the dehydrated script itself) from the docker container as well.
 
 If the container is not running yet, you can for example use the following command to register manually:
 
 ```bash
-docker run -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /letsencrypt/scripts/register.sh
+docker run -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /dehydrated/scripts/register.sh
 ```
 
 If you already have a running container, you can use:
 
 ```bash
-docker exec -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /letsencrypt/scripts/register.sh
+docker exec -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /dehydrated/scripts/register.sh
 ```
 
 To run a bash, call:
@@ -335,54 +529,31 @@ docker exec -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /bin/bas
 To run the dehydrated script yourself, run:
 
 ```bash
-docker run -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /letsencrypt/dehydrated --register --accept-terms --config /letsencrypt/configuration/config
+# For help
+docker run -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /dehydrated/dehydrated --help
+
+# To register to Let's Encrypt
+docker run -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /dehydrated/dehydrated --register --accept-terms --config /dehydrated/config
+
+# To request certificates
+docker run -it fwinkler79/arm64v8-dehydrated-letsencrypt-updater:1.0.0 /dehydrated/dehydrated --cron --config /dehydrated/config --out /dehydrated/certificates
 ```
 
-❗Note: The dehydrated script also allows to revoke certificates. In case you need that, you can run the script from this image directly.
-
-## Troubleshooting
-
-In case of trouble with the certificate fetch, proceed as follows:
-
-1. Log into the running `cert-updater` container and unregister from Let's Encrypt:
-   ```bash
-   docker exec -it cert-updater /bin/bash
-   $bash%>  /scripts/unregister.sh
-   ```
-2. Stop the cert-updater container:
-   ```bash
-   docker-compose down
-   # if still necessary do also this:
-   docker container rm cert-updater 
-   ```
-3. Delete local certs:
-   ```bash
-   sudo rm -rf ./certs/<your domain>
-   ```
-4. Start cert-updater container again:
-   ```bash
-   docker-compose up -d
-   docker logs -f cert-updater # to see the container boot up.
-   ```
-
-This should re-register with Let's Encrypt and re-fetch new certificates. It then should also restart `hass`.
+> ❗Note: The dehydrated script also allows to revoke certificates. In case you need that, you can run the script from this image directly. See [Dehdrated Usage](https://github.com/dehydrated-io/dehydrated/blob/master/README.md#usage) for more details.
 
 ## References
 
+**Duck DNS and Let's Encrypt** 
+* [Duck DNS](https://www.duckdns.org)
+* [Let's Encrypt](https://letsencrypt.org/)
+* [Effortless Encryption with Let's Encrypt and DuckDNS](https://www.home-assistant.io/blog/2017/09/27/effortless-encryption-with-lets-encrypt-and-duckdns/)
+
+**Dehydrated**
 * [Dehydrated](https://github.com/dehydrated-io/dehydrated/blob/master/README.md)
+* [Dehdrated Usage](https://github.com/dehydrated-io/dehydrated/blob/master/README.md#usage)
 * [Dehydrated Domains.txt Reference](https://github.com/dehydrated-io/dehydrated/blob/master/docs/domains_txt.md)
 * [Dehydrated Examples](https://github.com/dehydrated-io/dehydrated/tree/master/docs/examples)
 * [Dehydrated Docs](https://github.com/dehydrated-io/dehydrated/tree/master/docs)
-
-* [Duck DNS](https://www.duckdns.org)
-* [Let's Encrypt](https://letsencrypt.org/)
-* [dehydrated](https://github.com/dehydrated-io/dehydrated)
-* [Alpine docker client](https://github.com/Cethy/alpine-docker-client)
-* [Docker Dehydrated](https://github.com/matrix-org/docker-dehydrated)
-* [Installing TLS/SSL using Let's Encrypt](https://community.home-assistant.io/t/installing-tls-ssl-using-lets-encrypt/196975)
-* [Effortless Encryption with Let's Encrypt and DuckDNS](https://www.home-assistant.io/blog/2017/09/27/effortless-encryption-with-lets-encrypt-and-duckdns/)
-* [Hass, DuckDNS and Let's Encrypt](https://www.splitbrain.org/blog/2017-08/10-homeassistant_duckdns_letsencrypt)
-* [Simple Let's Encrypt on Debian](https://www.splitbrain.org/blog/2016-05/14-simple_letsencrypt_on_debian_apache)
 
 **Docker Cross-Building Images**
 * [Cross-Building Docker Images](https://fwinkler79.github.io/blog/cross-building-docker-images.html)
@@ -392,4 +563,12 @@ This should re-register with Let's Encrypt and re-fetch new certificates. It the
 * [Docker Official Images](https://github.com/docker-library/official-images?tab=readme-ov-file#architectures-other-than-amd64)
 * [Docker Official Alpine arm64v8 Image](https://hub.docker.com/r/arm64v8/alpine)
 * [Alpine Official arm64v8 image](https://hub.docker.com/layers/library/alpine/latest/images/sha256-cf7e6d447a6bdf4d1ab120c418c7fd9bdbb9c4e838554fda3ed988592ba02936)
+
+**Miscellaneous**
+* [Alpine docker client](https://github.com/Cethy/alpine-docker-client)
+* [Docker Dehydrated](https://github.com/matrix-org/docker-dehydrated)
+* [Installing TLS/SSL using Let's Encrypt](https://community.home-assistant.io/t/installing-tls-ssl-using-lets-encrypt/196975)
+* [Hass, DuckDNS and Let's Encrypt](https://www.splitbrain.org/blog/2017-08/10-homeassistant_duckdns_letsencrypt)
+* [Simple Let's Encrypt on Debian](https://www.splitbrain.org/blog/2016-05/14-simple_letsencrypt_on_debian_apache)
+
 
