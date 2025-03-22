@@ -19,9 +19,9 @@
 
 ## What is pi-dehydrated-letsencrypt-updater?
 
-pi-dehydrated-letsencrypt-updater (PDLU) is docker image that fetches [Let's Encrypt](https://letsencrypt.org) certificates for domains registered with [Duck DNS](https://www.duckdns.org/). It was built for Raspberry Pi with 64-bit ARM processors, but it could easily be built for other platforms as well.
+pi-dehydrated-letsencrypt-updater (PDLU) is a docker image that fetches [Let's Encrypt](https://letsencrypt.org) certificates for domains registered with [Duck DNS](https://www.duckdns.org/). It was built for Raspberry Pi with 64-bit ARM processors, but it could easily be built for other platforms as well.
 
-Let's Encrypt is a certificate authority (CA) that issues properly signed certificates free of charge. Duck DNS is a free dynamic DNS (dynDNS) services that you can register domains for your servers with.
+Let's Encrypt is a certificate authority (CA) that issues signed certificates free of charge. Duck DNS is a free dynamic DNS (dynDNS) services that you can register domains for your servers with.
 
 If you have a home server accessible by a given domain registered with Duck DNS, and you protect the server with e.g. HTTPS, you will need a valid and signed certificate that was issued by a trusted certificate authority and for your domain. This is what PDLU was built for.
 
@@ -122,7 +122,7 @@ Note that you can point other applications (e.g. running in docker containers on
 
 ### User Configurations
 
-In the `docker-compose.yaml` make sure to spefify at least the following:
+In the `docker-compose.yaml` make sure to specify at least the following:
 
 1. `DUCK_DNS_TOKEN` - the Duck DNS API token.
 2. `CA_URL` - the Let's Encrypt landscape to be used in production. (i.e. https://acme-v02.api.letsencrypt.org/directory)
@@ -140,7 +140,7 @@ The `domains.txt` file must contain the Duck DNS domains for which certificates 
 mydomain.duckdns.org
 ```
 
-For more and more complex examples see [Dehydrated Domains.txt Reference](https://github.com/dehydrated-io/dehydrated/blob/master/docs/domains_txt.md).
+For more complex examples see [Dehydrated Domains.txt Reference](https://github.com/dehydrated-io/dehydrated/blob/master/docs/domains_txt.md).
 
 The `restart-containers.sh` script can be equally simple. For example the following file would restart two containers on the Docker host named `homeassistant` and `portainer`:
 
@@ -247,7 +247,7 @@ In case of problems when fetching certificates proceed as follows:
       docker logs -f cert-updater # to see the container boot up.
    ```
 
-This should re-register with Let's Encrypt and re-fetch new certificates. It then should also restart the containers given in `restart-containers.sh`.
+This should register with Let's Encrypt again and fetch new certificates. It then should also restart the containers given in `restart-containers.sh`.
 
 ## Appendix A: Technical Setup
 
